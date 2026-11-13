@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-sinhala), ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: #faf7f5;
+  color: #1c1917;
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.6; /* Sinhala glyphs need a little extra height */
+}
+
+/* Horizontal swipe slider: hide scrollbar but keep it scrollable + snap */
+.snap-slider {
+  scrollbar-width: none;
+}
+.snap-slider::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
+}
