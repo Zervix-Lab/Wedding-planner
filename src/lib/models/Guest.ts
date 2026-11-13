@@ -1,5 +1,5 @@
 import mongoose, { Schema, type InferSchemaType, type Model } from "mongoose";
-import { EVENTS, GROUPS, INVITATIONS, RSVPS, SIDES } from "../types";
+import { GROUPS, INVITATIONS, RSVPS, SIDES } from "../types";
 
 const guestSchema = new Schema(
   {
@@ -12,7 +12,6 @@ const guestSchema = new Schema(
     group: { type: String, enum: GROUPS, default: "family" },
     adults: { type: Number, min: 0, max: 100, default: 1 },
     kids: { type: Number, min: 0, max: 100, default: 0 },
-    events: { type: [{ type: String, enum: EVENTS }], default: ["wedding", "homecoming"] },
     invitation: { type: String, enum: INVITATIONS, default: "not_sent" },
     rsvp: { type: String, enum: RSVPS, default: "pending", index: true },
     notes: { type: String, default: "", maxlength: 500 },

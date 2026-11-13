@@ -12,9 +12,6 @@ export type Role = (typeof ROLES)[number];
 export const GROUPS = ["family", "relatives", "office", "friends", "neighbours", "other"] as const;
 export type Group = (typeof GROUPS)[number];
 
-export const EVENTS = ["wedding", "homecoming"] as const;
-export type WeddingEvent = (typeof EVENTS)[number];
-
 export const INVITATIONS = ["not_sent", "given", "posted", "whatsapp"] as const;
 export type Invitation = (typeof INVITATIONS)[number];
 
@@ -55,8 +52,10 @@ export interface VendorDTO {
   contact: string;
   serviceCharge: number;
   minPlates: number;
-  showOnLanding: boolean;
   options: VendorOptionDTO[];
+  /** User id of whoever added it ("" for older vendors). Only that user or an admin may change it. */
+  addedById: string;
+  addedByName: string;
 }
 
 export interface GuestDTO {
@@ -67,7 +66,6 @@ export interface GuestDTO {
   group: Group;
   adults: number;
   kids: number;
-  events: WeddingEvent[];
   invitation: Invitation;
   rsvp: Rsvp;
   notes: string;
@@ -86,6 +84,9 @@ export interface PlanDTO {
   adults: number;
   kids: number;
   useGuestList: boolean;
+  listBasis: "confirmed" | "all";
+  extraAdults: number;
+  extraKids: number;
   selections: PlanSelection[];
   isFinal: boolean;
   createdAt: string;
@@ -111,10 +112,6 @@ export interface SettingsDTO {
   weddingTime: string;
   weddingVenue: string;
   weddingMap: string;
-  homecomingDate: string;
-  homecomingTime: string;
-  homecomingVenue: string;
-  homecomingMap: string;
 }
 
 /** Pick the text for the active language, falling back to the other one so nothing is ever blank. */

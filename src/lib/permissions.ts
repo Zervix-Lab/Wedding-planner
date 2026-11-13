@@ -12,13 +12,16 @@ export const isAdmin = (u: Actor) => u.role === "admin";
 /** Admin always; an editor only when the admin switched "can add vendors" on for them. */
 export const canManageVendors = (u: Actor) => u.role === "admin" || u.canManageVendors;
 
+/** Edit or delete a vendor: admin can change any; an allowed editor only the vendors they added themselves. */
+export const canModifyVendor = (u: Actor, addedById: string) => u.role === "admin" || (canManageVendors(u) && addedById !== "" && addedById === u.id);
+
 /** Create / edit / delete saved plans, mark one Final. Editors can view and use the calculator only. */
 export const canManagePlans = isAdmin;
 export const canManageUsers = isAdmin;
 export const canManageSettings = isAdmin;
 
-/** Any signed-in user may add and edit guests. */
+/** Any signed-in user may add guests, and everyone sees every guest. */
 export const canEditGuests = (_u: Actor) => true;
 
-/** Admin can delete any guest; an editor only the ones they added themselves. */
-export const canDeleteGuest = (u: Pick<Actor, "id" | "role">, addedById: string) => u.role === "admin" || (addedById !== "" && addedById === u.id);
+/** Edit or delete: admin can change any guest; an editor only the ones they added themselves. */
+export const canModifyGuest = (u: Pick<Actor, "id" | "role">, addedById: string) => u.role === "admin" || (addedById !== "" && addedById === u.id);

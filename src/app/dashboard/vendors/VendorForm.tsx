@@ -27,7 +27,6 @@ interface FormState {
   contact: string;
   serviceCharge: string;
   minPlates: string;
-  showOnLanding: boolean;
   images: string[];
   options: OptionForm[];
 }
@@ -39,7 +38,7 @@ const emptyOption = (): OptionForm => ({ key: newKey(), name: emptyBi(), priceTy
 
 function fromVendor(v: VendorDTO | null, firstCategory: string): FormState {
   if (!v) {
-    return { name: emptyBi(), category: firstCategory, newCategory: emptyBi(), contact: "", serviceCharge: "0", minPlates: "0", showOnLanding: true, images: [], options: [] };
+    return { name: emptyBi(), category: firstCategory, newCategory: emptyBi(), contact: "", serviceCharge: "0", minPlates: "0", images: [], options: [] };
   }
   return {
     name: v.name,
@@ -48,7 +47,6 @@ function fromVendor(v: VendorDTO | null, firstCategory: string): FormState {
     contact: v.contact,
     serviceCharge: String(v.serviceCharge),
     minPlates: String(v.minPlates),
-    showOnLanding: v.showOnLanding,
     images: v.images,
     options: v.options.map((o) => ({
       key: newKey(),
@@ -90,6 +88,9 @@ export function VendorForm({
   const setOption = (key: string, patch: Partial<OptionForm>) =>
     setForm((f) => ({ ...f, options: f.options.map((o) => (o.key === key ? { ...o, ...patch } : o)) }));
 
+  // Service charge / minimum plates only matter when at least one option is priced per plate (hotels, catering).
+  const hasPerPlate = form.options.some((o) => o.priceType === "per_plate");
+
   function submit(e: FormEvent) {
     e.preventDefault();
     const payload = {
@@ -97,9 +98,8 @@ export function VendorForm({
       category: form.category,
       newCategory: form.newCategory,
       contact: form.contact,
-      serviceCharge: form.serviceCharge,
-      minPlates: form.minPlates,
-      showOnLanding: form.showOnLanding,
+      serviceCharge: hasPerPlate ? form.serviceCharge : "0",
+      minPlates: hasPerPlate ? form.minPlates : "0",
       images: form.images,
       options: form.options.map((o) => ({
         _id: o._id,
@@ -144,19 +144,16 @@ export function VendorForm({
           <Input maxLength={120} value={form.contact} onChange={(e) => set("contact", e.target.value)} inputMode="tel" />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
-          <Field label={t("vendors.serviceCharge")}>
-            <Input type="number" inputMode="decimal" min={0} max={100} step="any" value={form.serviceCharge} onChange={(e) => set("serviceCharge", e.target.value)} />
-          </Field>
-          <Field label={t("vendors.minPlates")} hint={t("vendors.minPlatesHint")}>
-            <Input type="number" inputMode="numeric" min={0} value={form.minPlates} onChange={(e) => set("minPlates", e.target.value)} />
-          </Field>
-        </div>
-
-        <label className="flex min-h-12 items-center gap-3 rounded-xl border-2 border-stone-300 px-4 text-lg">
-          <input type="checkbox" checked={form.showOnLanding} onChange={(e) => set("showOnLanding", e.target.checked)} className="h-6 w-6 accent-rose-800" />
-          {t("vendors.showOnLanding")}
-        </label>
+        {hasPerPlate && (
+          <div className="grid grid-cols-2 gap-3">
+            <Field label={t("vendors.serviceCharge")}>
+              <Input type="number" inputMode="decimal" min={0} max={100} step="any" value={form.serviceCharge} onChange={(e) => set("serviceCharge", e.target.value)} />
+            </Field>
+            <Field label={t("vendors.minPlates")} hint={t("vendors.minPlatesHint")}>
+              <Input type="number" inputMode="numeric" min={0} value={form.minPlates} onChange={(e) => set("minPlates", e.target.value)} />
+            </Field>
+          </div>
+        )}
 
         <div>
           <p className="mb-2 text-base font-semibold">{t("vendors.images")}</p>

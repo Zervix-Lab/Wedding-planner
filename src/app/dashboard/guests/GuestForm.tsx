@@ -4,7 +4,6 @@ import { BiField } from "@/components/BiField";
 import { useT, useToast } from "@/components/Providers";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
 import {
-  EVENTS,
   GROUPS,
   INVITATIONS,
   RSVPS,
@@ -15,7 +14,6 @@ import {
   type Invitation,
   type Rsvp,
   type Side,
-  type WeddingEvent,
 } from "@/lib/types";
 import { createGuest, updateGuest } from "./actions";
 
@@ -26,7 +24,6 @@ interface FormState {
   group: Group;
   adults: string;
   kids: string;
-  events: WeddingEvent[];
   invitation: Invitation;
   rsvp: Rsvp;
   notes: string;
@@ -39,7 +36,6 @@ const blank = (side: Side): FormState => ({
   group: "family",
   adults: "1",
   kids: "0",
-  events: ["wedding", "homecoming"],
   invitation: "not_sent",
   rsvp: "pending",
   notes: "",
@@ -52,7 +48,6 @@ export function GuestForm({ guest, defaultSide, onDone }: { guest: GuestDTO | nu
   const [pending, start] = useTransition();
   const [form, setForm] = useState<FormState>(() => (guest ? { ...guest, adults: String(guest.adults), kids: String(guest.kids) } : blank(defaultSide)));
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
-  const toggleEvent = (e: WeddingEvent) => set("events", form.events.includes(e) ? form.events.filter((x) => x !== e) : [...form.events, e]);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -101,17 +96,6 @@ export function GuestForm({ guest, defaultSide, onDone }: { guest: GuestDTO | nu
         </Field>
       </div>
 
-      <fieldset className="sm:col-span-2">
-        <legend className="mb-1 text-base font-semibold">{t("guests.events")}</legend>
-        <div className="flex flex-col gap-2 sm:flex-row">
-          {EVENTS.map((ev) => (
-            <label key={ev} className="flex min-h-12 flex-1 cursor-pointer items-center gap-3 rounded-xl border-2 border-stone-300 bg-white px-4 text-lg">
-              <input type="checkbox" checked={form.events.includes(ev)} onChange={() => toggleEvent(ev)} className="h-6 w-6 accent-rose-800" />
-              {t(`event.${ev}`)}
-            </label>
-          ))}
-        </div>
-      </fieldset>
       <Field label={t("guests.invitation")}>
         <Select value={form.invitation} onChange={(e) => set("invitation", e.target.value as Invitation)}>
           {INVITATIONS.map((i) => (

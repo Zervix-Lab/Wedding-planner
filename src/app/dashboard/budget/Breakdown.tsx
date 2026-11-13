@@ -39,7 +39,7 @@ export const Breakdown = memo(function Breakdown({
       ) : (
         <ul className="space-y-4">
           {lines.map(({ category, vendor, option, calc }) => (
-            <li key={category} className="space-y-1 border-b border-stone-300 pb-3">
+            <li key={`${vendor._id}:${option._id}`} className="space-y-1 border-b border-stone-300 pb-3">
               <p className="text-base font-semibold text-stone-600">{catNames.get(category) ?? category}</p>
               <div className="flex justify-between gap-3 text-lg font-bold">
                 <span className="min-w-0 break-words">

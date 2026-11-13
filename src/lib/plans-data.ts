@@ -2,7 +2,7 @@ import { unstable_cache } from "next/cache";
 import { connectDB } from "./db";
 import { Guest } from "./models/Guest";
 import { Plan } from "./models/Plan";
-import type { Counts } from "./calc";
+import type { Counts, GuestCounts } from "./calc";
 import type { PlanDTO } from "./types";
 
 /** Saved plans. Cached with tag "plans"; refreshed whenever a plan changes. */
@@ -16,6 +16,9 @@ export const getPlans = unstable_cache(
       adults: p.adults ?? 1,
       kids: p.kids ?? 0,
       useGuestList: p.useGuestList ?? false,
+      listBasis: p.listBasis === "all" ? "all" : "confirmed",
+      extraAdults: p.extraAdults ?? 0,
+      extraKids: p.extraKids ?? 0,
       selections: (p.selections ?? []).map((s) => ({ vendor: String(s.vendor), optionId: String(s.optionId) })),
       isFinal: p.isFinal ?? false,
       createdAt: new Date((p as unknown as { createdAt?: Date }).createdAt ?? 0).toISOString(),
@@ -25,16 +28,19 @@ export const getPlans = unstable_cache(
   { tags: ["plans"], revalidate: 120 },
 );
 
-/** Total adults + kids across guests who said they are coming. Cached with tag "guests". */
-export const getConfirmedCounts = unstable_cache(
-  async (): Promise<Counts> => {
+/** Total adults + kids on the guest list, split by RSVP status. Cached with tag "guests". */
+export const getGuestCounts = unstable_cache(
+  async (): Promise<GuestCounts> => {
     await connectDB();
-    const [r] = await Guest.aggregate<{ adults: number; kids: number }>([
-      { $match: { rsvp: "confirmed" } },
-      { $group: { _id: null, adults: { $sum: "$adults" }, kids: { $sum: "$kids" } } },
+    const rows = await Guest.aggregate<{ _id: string; adults: number; kids: number }>([
+      { $group: { _id: "$rsvp", adults: { $sum: "$adults" }, kids: { $sum: "$kids" } } },
     ]);
-    return { adults: r?.adults ?? 0, kids: r?.kids ?? 0 };
+    const pick = (rsvp: string): Counts => {
+      const r = rows.find((x) => x._id === rsvp);
+      return { adults: r?.adults ?? 0, kids: r?.kids ?? 0 };
+    };
+    return { confirmed: pick("confirmed"), maybe: pick("maybe"), pending: pick("pending"), declined: pick("declined") };
   },
-  ["confirmed-counts"],
+  ["guest-counts"],
   { tags: ["guests"], revalidate: 120 },
 );

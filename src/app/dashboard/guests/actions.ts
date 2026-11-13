@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { fail, ok, type ActionResult } from "@/lib/actions";
 import { Guest } from "@/lib/models/Guest";
-import { canDeleteGuest, canEditGuests } from "@/lib/permissions";
+import { canEditGuests, canModifyGuest } from "@/lib/permissions";
 import { isId, parseGuest } from "@/lib/validate";
 
 function refresh() {
@@ -38,8 +38,10 @@ export async function updateGuest(id: string, raw: unknown): Promise<ActionResul
   if (!p.ok) return p;
   try {
     await connectDB();
-    const res = await Guest.findByIdAndUpdate(id, { $set: p.value }, { runValidators: true });
-    if (!res) return fail("err.notFound");
+    const guest = await Guest.findById(id).select("addedBy").lean();
+    if (!guest) return fail("err.notFound");
+    if (!canModifyGuest(me, guest.addedBy ? String(guest.addedBy) : "")) return fail("err.notYours");
+    await Guest.findByIdAndUpdate(id, { $set: p.value }, { runValidators: true });
   } catch (err) {
     console.error(err);
     return fail("err.generic");
@@ -56,7 +58,7 @@ export async function deleteGuest(id: string): Promise<ActionResult> {
     await connectDB();
     const guest = await Guest.findById(id).select("addedBy").lean();
     if (!guest) return ok();
-    if (!canDeleteGuest(me, guest.addedBy ? String(guest.addedBy) : "")) return fail("err.notYours");
+    if (!canModifyGuest(me, guest.addedBy ? String(guest.addedBy) : "")) return fail("err.notYours");
     await Guest.findByIdAndDelete(id);
   } catch (err) {
     console.error(err);

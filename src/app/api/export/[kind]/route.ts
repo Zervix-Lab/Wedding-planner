@@ -9,7 +9,7 @@ import { buildGuestFilter, parseGuestParams } from "@/lib/guest-query";
 import { getI18n } from "@/lib/i18n-server";
 import { Guest } from "@/lib/models/Guest";
 import { User } from "@/lib/models/User";
-import { getConfirmedCounts, getPlans } from "@/lib/plans-data";
+import { getGuestCounts, getPlans } from "@/lib/plans-data";
 import { buildXlsx, XLSX_MIME, type SheetData } from "@/lib/xlsx";
 import { bi } from "@/lib/types";
 
@@ -30,7 +30,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
   let sheets: SheetData[];
 
   if (kind === "guests") {
-    const filter = buildGuestFilter(parseGuestParams(Object.fromEntries(url.searchParams)));
+    const filter = buildGuestFilter(parseGuestParams(Object.fromEntries(url.searchParams)), me.id);
     const docs = await Guest.find(filter)
       .sort({ "name.en": 1, "name.si": 1, _id: 1 })
       .limit(MAX_ROWS)
@@ -47,7 +47,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
         g.adults ?? 0,
         g.kids ?? 0,
         (g.adults ?? 0) + (g.kids ?? 0),
-        (g.events ?? []).map((e) => t(`event.${e}`)).join(", "),
         t(`invitation.${g.invitation ?? "not_sent"}`),
         t(`rsvp.${g.rsvp ?? "pending"}`),
         g.notes ?? "",
@@ -67,21 +66,20 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
           { header: t("guests.adults"), width: 11, number: true },
           { header: t("guests.kids"), width: 9, number: true },
           { header: t("xl.people"), width: 11, number: true },
-          { header: t("guests.events"), width: 24 },
           { header: t("guests.invitation"), width: 18 },
           { header: t("guests.rsvp"), width: 20 },
           { header: t("guests.notes"), width: 30 },
           { header: t("xl.addedBy"), width: 16 },
         ],
         rows,
-        totals: [t("xl.total"), "", "", "", "", sum(5), sum(6), sum(7), "", "", "", "", ""],
+        totals: [t("xl.total"), "", "", "", "", sum(5), sum(6), sum(7), "", "", "", ""],
       },
     ];
   } else if (kind === "vendors") {
     const [vendors, cats] = await Promise.all([getAllVendors(), getCategories()]);
     const catName = new Map(cats.map((c) => [c.slug, bi(c.name, lang)]));
     const rows = vendors.flatMap((v) => {
-      const base = [catName.get(v.category) ?? v.category, bi(v.name, lang), v.contact, v.serviceCharge, v.minPlates, v.showOnLanding ? yes : no];
+      const base = [catName.get(v.category) ?? v.category, bi(v.name, lang), v.contact, v.serviceCharge, v.minPlates];
       if (v.options.length === 0) return [[...base, "", "", null, null, ""]];
       return v.options.map((o) => [
         ...base,
@@ -101,7 +99,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
           { header: t("vendors.contact"), width: 18 },
           { header: t("vendors.serviceCharge"), width: 12, number: true },
           { header: t("vendors.minPlates"), width: 11, number: true },
-          { header: t("xl.onLanding"), width: 12 },
           { header: t("vendors.optionName"), width: 30 },
           { header: t("vendors.priceType"), width: 16 },
           { header: t("vendors.price"), width: 14, number: true },
@@ -112,7 +109,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ kind: st
       },
     ];
   } else if (kind === "plans") {
-    const [vendors, plans, confirmed, cats] = await Promise.all([getAllVendors(), getPlans(), getConfirmedCounts(), getCategories()]);
+    const [vendors, plans, confirmed, cats] = await Promise.all([getAllVendors(), getPlans(), getGuestCounts(), getCategories()]);
     const byId = indexVendors(vendors);
     const order = cats.map((c) => c.slug);
     const catName = new Map(cats.map((c) => [c.slug, bi(c.name, lang)]));

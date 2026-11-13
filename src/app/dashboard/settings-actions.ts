@@ -29,8 +29,7 @@ export async function saveSettings(raw: unknown): Promise<ActionResult> {
   if (!isObj(raw)) return fail("err.invalid");
 
   const weddingDate = day(raw.weddingDate);
-  const homecomingDate = day(raw.homecomingDate);
-  if (weddingDate === undefined || homecomingDate === undefined) return fail("err.invalid");
+  if (weddingDate === undefined) return fail("err.invalid");
 
   try {
     await connectDB();
@@ -45,10 +44,6 @@ export async function saveSettings(raw: unknown): Promise<ActionResult> {
           weddingTime: time(raw.weddingTime),
           weddingVenue: str(raw.weddingVenue, 200),
           weddingMap: link(raw.weddingMap),
-          homecomingDate,
-          homecomingTime: time(raw.homecomingTime),
-          homecomingVenue: str(raw.homecomingVenue, 200),
-          homecomingMap: link(raw.homecomingMap),
         },
       },
       { upsert: true },
@@ -57,7 +52,7 @@ export async function saveSettings(raw: unknown): Promise<ActionResult> {
     console.error(err);
     return fail("err.generic");
   }
-  revalidateTag("landing");
+  revalidateTag("settings");
   revalidatePath("/dashboard");
   return ok();
 }

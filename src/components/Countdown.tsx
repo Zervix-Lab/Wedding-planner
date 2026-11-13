@@ -28,7 +28,7 @@ export function Countdown({ date }: { date: string }) {
   const endOfDay = target + 86400000;
 
   if (p?.done) {
-    return <p className="text-2xl font-bold text-rose-900">{now! < endOfDay ? t("landing.today") : t("landing.passed")}</p>;
+    return <p className="font-serif text-3xl font-bold text-rose-900 sm:text-4xl">{now! < endOfDay ? t("landing.today") : t("landing.passed")}</p>;
   }
 
   const cells: [string, number | undefined][] = [
@@ -40,12 +40,17 @@ export function Countdown({ date }: { date: string }) {
 
   return (
     <div>
-      <p className="mb-2 text-lg font-semibold text-stone-800">{t("landing.countdown")}</p>
-      <div className="mx-auto grid max-w-md grid-cols-4 gap-2 sm:gap-3">
+      <p className="mb-3 text-base font-semibold uppercase tracking-[0.2em] text-rose-900/80 sm:text-lg">{t("landing.countdown")}</p>
+      <div className="mx-auto grid max-w-xl grid-cols-4 gap-2 sm:gap-4">
         {cells.map(([label, value]) => (
-          <div key={label} className="rounded-2xl border border-rose-200 bg-white px-1 py-3 shadow-sm">
-            <div className="text-3xl font-bold tabular-nums text-rose-900 sm:text-4xl">{value === undefined ? "--" : String(value).padStart(2, "0")}</div>
-            <div className="text-base text-stone-800">{label}</div>
+          <div
+            key={label}
+            className="rounded-2xl border border-white/70 bg-white/55 px-1 py-3 shadow-lg shadow-rose-900/10 backdrop-blur-md sm:rounded-3xl sm:py-5"
+          >
+            <div className="font-serif text-3xl font-bold tabular-nums text-rose-800 sm:text-5xl">
+              {value === undefined ? "--" : String(value).padStart(2, "0")}
+            </div>
+            <div className="mt-1 text-sm font-medium text-stone-700 sm:text-base">{label}</div>
           </div>
         ))}
       </div>

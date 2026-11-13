@@ -2,10 +2,10 @@
 import { unstable_cache } from "next/cache";
 import { connectDB } from "./db";
 import { toBi } from "./bi";
-import { getCategories } from "./categories";
+import "./models/User"; // registers the User model so populate("addedBy") works
 import { Vendor } from "./models/Vendor";
 import { Settings } from "./models/Settings";
-import type { Bi, CategoryDTO, PriceType, SettingsDTO, VendorDTO } from "./types";
+import type { PriceType, SettingsDTO, VendorDTO } from "./types";
 
 interface LeanVendor {
   _id: unknown;
@@ -15,7 +15,7 @@ interface LeanVendor {
   contact?: string;
   serviceCharge?: number;
   minPlates?: number;
-  showOnLanding?: boolean;
+  addedBy?: { _id: unknown; name?: string } | null;
   options?: {
     _id: unknown;
     name: unknown;
@@ -35,7 +35,8 @@ export function toVendorDTO(v: LeanVendor): VendorDTO {
     contact: v.contact ?? "",
     serviceCharge: v.serviceCharge ?? 0,
     minPlates: v.minPlates ?? 0,
-    showOnLanding: v.showOnLanding !== false,
+    addedById: v.addedBy ? String(v.addedBy._id) : "",
+    addedByName: v.addedBy?.name ?? "",
     options: (v.options ?? []).map((o) => ({
       _id: String(o._id),
       name: toBi(o.name),
@@ -51,7 +52,7 @@ export function toVendorDTO(v: LeanVendor): VendorDTO {
 export const getAllVendors = unstable_cache(
   async (): Promise<VendorDTO[]> => {
     await connectDB();
-    const docs = await Vendor.find().sort({ category: 1, _id: 1 }).lean();
+    const docs = await Vendor.find().sort({ category: 1, _id: 1 }).populate("addedBy", "name").lean();
     return docs.map((d) => toVendorDTO(d as unknown as LeanVendor));
   },
   ["vendors-all"],
@@ -70,41 +71,8 @@ async function readSettings(): Promise<SettingsDTO> {
     weddingTime: s?.weddingTime ?? "",
     weddingVenue: s?.weddingVenue ?? "",
     weddingMap: s?.weddingMap ?? "",
-    homecomingDate: day(s?.homecomingDate),
-    homecomingTime: s?.homecomingTime ?? "",
-    homecomingVenue: s?.homecomingVenue ?? "",
-    homecomingMap: s?.homecomingMap ?? "",
   };
 }
 
-/** Couple names + date. Cached; refreshed whenever an admin saves them (tag "landing"). */
-export const getSettings = unstable_cache(readSettings, ["settings"], { tags: ["landing"], revalidate: 3600 });
-
-export interface LandingVendor {
-  _id: string;
-  name: Bi;
-  category: string;
-  images: string[];
-}
-
-/**
- * Public landing page data. Prices are NEVER selected here, so they cannot leak to logged-out visitors.
- * Cached for an hour and invalidated with revalidateTag("landing") whenever vendors/settings change.
- */
-export const getLandingData = unstable_cache(
-  async (): Promise<{ settings: SettingsDTO; vendors: LandingVendor[]; categories: CategoryDTO[] }> => {
-    await connectDB();
-    const [settings, categories, docs] = await Promise.all([
-      readSettings(),
-      getCategories(),
-      Vendor.find({ showOnLanding: true }).select("name category images").sort({ _id: 1 }).lean(),
-    ]);
-    return {
-      settings,
-      categories,
-      vendors: docs.map((d) => ({ _id: String(d._id), name: toBi(d.name), category: d.category, images: d.images ?? [] })),
-    };
-  },
-  ["landing-data"],
-  { tags: ["landing", "categories"], revalidate: 3600 },
-);
+/** Couple names + date. Cached; refreshed whenever an admin saves them (tag "settings"). */
+export const getSettings = unstable_cache(readSettings, ["settings"], { tags: ["settings"], revalidate: 3600 });

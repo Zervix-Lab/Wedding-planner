@@ -9,7 +9,7 @@ big text, big buttons, plain words, Sinhala by default, and a Sinhala/English sw
 
 | Page | Who | What |
 |---|---|---|
-| `/` | Public | Couple names, countdown, invitation message, the **wedding and homecoming details (date, time, place, map button)**, vendor cards by category with swipeable photos (**names and photos only, no prices**), and a plain-language **"How to use this site"** guide for relatives. |
+| `/` | Public | Redirects to `/dashboard` when logged in, otherwise to `/login`. There is no public home page: the app is only for the people planning the wedding. |
 | `/login` | Public | Email + password |
 | `/dashboard` | Admin + editors | Days left, guests (bride/groom split), replies and invitation status, vendors, latest guests (with who added them), and the **complete final budget: every item, every price calculation, service charges and the grand total**. Admin also edits the couple's names, message and event details here. |
 | `/dashboard/budget` | Admin + editors | Budget Builder (live total), saved plans, compare up to 3. **Only the admin can save plans / mark Final.** |
@@ -45,7 +45,7 @@ npm run dev                    # http://localhost:3000
 ```
 
 Log in with the admin email/password from `.env.local`, then:
-1. **Dashboard** → type the bride's name, groom's name, a short message, and the date / time / place of the wedding and the homecoming (paste a Google Maps link if you like) → Save. It appears on the home page at once.
+1. **Dashboard** → type the bride's name, groom's name, a short message, and the date / time / place of the wedding (paste a Google Maps link if you like) → Save.
 2. **Family members** → add accounts for parents/relatives: name, email, password, role (**Editor** by default) and side. Tick *Can add and change vendors* only for people you trust with the vendor list.
 3. **Vendors** → add hotels, photographers, etc.
 
@@ -77,21 +77,20 @@ Tip: set a **region close to your Atlas cluster** (Vercel → Settings → Funct
 
 - **Auth:** `POST /api/auth/login` checks the password with bcrypt and sets an `httpOnly`, `sameSite=lax` (and `secure` in production) cookie holding a 7-day JWT. `src/middleware.ts` runs on the Edge runtime and **only verifies the JWT** (no Mongoose). It protects `/dashboard/*` and keeps `/dashboard/users` admin-only. Server pages and actions additionally re-check that the user still exists, so deleting an account locks that person out immediately.
 - **Names are saved exactly as typed.** Type in Sinhala and it is stored as Sinhala; type in English and it is stored as English. Nothing is translated automatically. The 8 built-in categories and all screen text exist in both languages.
-- **Categories** are data, not code: the 8 built-ins plus any the admin (or an allowed editor) adds while creating a vendor. They appear in the vendor form, the budget builder, the landing page and the exports.
+- **Categories** are data, not code: the 8 built-ins plus any the admin (or an allowed editor) adds while creating a vendor. They appear in the vendor form, the budget builder and the exports.
 - **Excel export** (`/api/export/[kind]`) is generated on the server by a small built-in writer (`src/lib/xlsx.ts`, no library): real `.xlsx` with styled headers, frozen header row, filters, number formats and totals. The guest export follows the filters on screen.
 - **Data changes** use Next.js Server Actions (`actions.ts` next to each page). Every action re-checks login/role and re-validates all input (`src/lib/validate.ts`). Errors travel as translation keys so toasts appear in the chosen language.
 - **Budget maths** lives in one pure file, `src/lib/calc.ts`, used by the browser (instant totals, no server round-trip) and the server (dashboard total). **Totals are never stored**; plans keep only the selections, so a price change in Vendors updates every plan.
   - `fixed` → the option price (service charge is not applied to fixed prices)
   - `per_plate` → `adults × price + kids × (kidsPrice ?? price)`; if `adults + kids < minPlates` it charges `minPlates × price`; then adds the vendor's service-charge %.
 - **Images:** the browser shrinks photos to ≤1600px wide (JPEG), asks `/api/upload/sign` for a signature, then uploads **directly to Cloudinary**. Only the `public_id` is saved. `next/image` uses a custom Cloudinary loader (`f_auto,q_auto`, sized per device). Replaced/deleted photos are removed from Cloudinary.
-- **Landing-page privacy:** `getLandingData()` in `src/lib/data.ts` selects only `name category images`, so prices cannot reach logged-out visitors. It is cached and refreshed whenever vendors or the couple's details change.
 - **Languages:** `locales/si.json` + `locales/en.json`, a ~20-line `t()` function, language kept in the `lang` cookie (default Sinhala), Noto Sans Sinhala via `next/font`. Only the active language is sent to the browser. Run `npm run check:i18n` after editing translations: it fails if a key is missing in either language or used in code but not defined.
 
 ## Speed and freshness
 
 Pages are fast because data is read from a **server-side cache** that is refreshed the instant something changes:
 
-- Every save, edit or delete in the app clears exactly the data it affects (`guests`, `vendors`, `plans`, `users`, `landing` tags), so you and everyone else see the new data on the next screen. An editor's new guest shows on the admin's dashboard immediately.
+- Every save, edit or delete in the app clears exactly the data it affects (`guests`, `vendors`, `plans`, `users`, `settings` tags), so you and everyone else see the new data on the next screen. An editor's new guest shows on the admin's dashboard immediately.
 - The browser keeps visited pages for 30 seconds, so moving between pages and using Back is instant. Your own saves always clear it.
 - The signed-in user is re-checked against the database every 30 seconds (and immediately after the admin changes or deletes a member). A deleted member is locked out right away on the server that handled the deletion, and within 30 seconds on any other.
 - **Edits made outside the app** (for example directly in the Atlas web page) can take up to 2 minutes to appear. Use the app for changes.

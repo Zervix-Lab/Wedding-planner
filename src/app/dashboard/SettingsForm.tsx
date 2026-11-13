@@ -6,7 +6,7 @@ import { Button, Card, Field, Input, Textarea } from "@/components/ui";
 import type { SettingsDTO } from "@/lib/types";
 import { saveSettings } from "./settings-actions";
 
-type EventKey = "wedding" | "homecoming";
+type EventKey = "wedding";
 
 export function SettingsForm({ initial, highlight }: { initial: SettingsDTO; highlight: boolean }) {
   const t = useT();
@@ -63,10 +63,7 @@ export function SettingsForm({ initial, highlight }: { initial: SettingsDTO; hig
         <Field label={t("dash.message")} hint={t("dash.messageHint")}>
           <Textarea rows={3} maxLength={400} value={form.message} onChange={(e) => set("message", e.target.value)} />
         </Field>
-        <div className="grid gap-4 lg:grid-cols-2">
-          {eventBox("wedding", t("dash.weddingEvent"))}
-          {eventBox("homecoming", t("dash.homecomingEvent"))}
-        </div>
+        {eventBox("wedding", t("dash.weddingEvent"))}
         <Button type="submit" icon="save" disabled={pending}>
           {pending ? t("common.pleaseWait") : t("common.save")}
         </Button>

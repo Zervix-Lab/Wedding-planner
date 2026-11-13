@@ -6,7 +6,7 @@ import { ExportButton } from "@/components/ExportButton";
 import { Icon } from "@/components/Icon";
 import { useConfirm, useLang, useT, useToast } from "@/components/Providers";
 import { Badge, Button, Card, EmptyState, Input, PageTitle, Select } from "@/components/ui";
-import { canDeleteGuest } from "@/lib/permissions";
+import { canModifyGuest } from "@/lib/permissions";
 import { GROUPS, RSVPS, SIDES, bi, type GuestDTO, type Role, type Rsvp, type Side } from "@/lib/types";
 import { deleteGuest } from "./actions";
 import { GuestForm } from "./GuestForm";
@@ -16,6 +16,8 @@ interface Query {
   side: string;
   group: string;
   rsvp: string;
+  /** "1" = only the guests I added */
+  mine: string;
 }
 
 interface Props {
@@ -51,13 +53,13 @@ export function GuestsManager({ guests, summary, page, pages, hasAny, defaultSid
   const queryRef = useRef(query);
   useEffect(() => {
     if (!navPending) queryRef.current = query;
-  }, [query.q, query.side, query.group, query.rsvp, navPending]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [query.q, query.side, query.group, query.rsvp, query.mine, navPending]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function go(next: Partial<Query> & { page?: number }) {
     const merged = { ...queryRef.current, ...next };
     queryRef.current = merged;
     const params = new URLSearchParams();
-    for (const k of ["q", "side", "group", "rsvp"] as const) if (merged[k]) params.set(k, merged[k]);
+    for (const k of ["q", "side", "group", "rsvp", "mine"] as const) if (merged[k]) params.set(k, merged[k]);
     if (next.page && next.page > 1) params.set("page", String(next.page));
     const qs = params.toString();
     startNav(() => router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
@@ -92,7 +94,7 @@ export function GuestsManager({ guests, summary, page, pages, hasAny, defaultSid
   }
 
   const visible = guests.filter((g) => !hidden.includes(g._id));
-  const filtered = Boolean(query.q || query.side || query.group || query.rsvp);
+  const filtered = Boolean(query.q || query.side || query.group || query.rsvp || query.mine);
   const exportQs = new URLSearchParams(Object.entries(query).filter(([, v]) => v)).toString();
 
   const columns: Column<GuestDTO>[] = [
@@ -129,28 +131,32 @@ export function GuestsManager({ guests, summary, page, pages, hasAny, defaultSid
     {
       key: "invitation",
       header: t("guests.invitation"),
-      cell: (g) => (
-        <span>
-          {t(`invitation.${g.invitation}`)}
-          <span className="block text-base text-stone-600">{g.events.map((e) => t(`event.${e}`)).join(", ")}</span>
-        </span>
-      ),
+      cell: (g) => <span>{t(`invitation.${g.invitation}`)}</span>,
     },
     { key: "rsvp", header: t("guests.rsvp"), cell: (g) => <Badge tone={RSVP_TONE[g.rsvp]}>{t(`rsvp.${g.rsvp}`)}</Badge> },
-    { key: "by", header: t("xl.addedBy"), cell: (g) => g.addedByName || <span className="text-stone-500">-</span> },
+    {
+      key: "by",
+      header: t("xl.addedBy"),
+      cell: (g) =>
+        g.addedById === me.id ? <Badge tone="green">{t("guests.you")}</Badge> : g.addedByName || <span className="text-stone-500">-</span>,
+    },
     {
       key: "actions",
       header: "",
       actions: true,
       cell: (g) => (
         <div className="flex flex-wrap gap-2 xl:flex-col">
-          <Button variant="secondary" icon="edit" onClick={() => startEdit(g)}>
-            {t("common.edit")}
-          </Button>
-          {canDeleteGuest(me, g.addedById) && (
-            <Button variant="danger" icon="trash" onClick={() => remove(g)} disabled={delPending}>
-              {t("common.delete")}
-            </Button>
+          {canModifyGuest(me, g.addedById) ? (
+            <>
+              <Button variant="secondary" icon="edit" onClick={() => startEdit(g)}>
+                {t("common.edit")}
+              </Button>
+              <Button variant="danger" icon="trash" onClick={() => remove(g)} disabled={delPending}>
+                {t("common.delete")}
+              </Button>
+            </>
+          ) : (
+            <span className="text-base text-stone-500">{t("guests.viewOnly")}</span>
           )}
         </div>
       ),
@@ -194,6 +200,23 @@ export function GuestsManager({ guests, summary, page, pages, hasAny, defaultSid
       ) : (
         <>
           <div className="mb-4 space-y-3">
+            {/* Everyone sees every guest; "My guests" shows only the ones I added (the ones I can edit) */}
+            <div role="group" className="grid grid-cols-2 gap-2 rounded-2xl bg-stone-200 p-1.5">
+              {(["", "1"] as const).map((v) => (
+                <button
+                  key={v || "all"}
+                  type="button"
+                  aria-pressed={query.mine === v}
+                  onClick={() => go({ mine: v })}
+                  className={`flex min-h-12 items-center justify-center gap-2 rounded-xl px-2 text-base font-semibold ${
+                    query.mine === v ? "bg-white text-rose-900 shadow" : "text-stone-800"
+                  }`}
+                >
+                  <Icon name="users" className="h-5 w-5" />
+                  {v ? t("guests.tabMine") : t("guests.tabAll")}
+                </button>
+              ))}
+            </div>
             <div className="relative">
               <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-6 w-6 -translate-y-1/2 text-stone-600" />
               <Input
@@ -249,7 +272,7 @@ export function GuestsManager({ guests, summary, page, pages, hasAny, defaultSid
                     icon="x"
                     onClick={() => {
                       setSearch("");
-                      go({ q: "", side: "", group: "", rsvp: "" });
+                      go({ q: "", side: "", group: "", rsvp: "", mine: "" });
                     }}
                   >
                     {t("guests.clearFilters")}
