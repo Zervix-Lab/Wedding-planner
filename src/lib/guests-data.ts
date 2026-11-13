@@ -63,9 +63,10 @@ export interface GuestsPage {
 
 /** One page of the filtered guest list. The filter values are part of the cache key. */
 export const getGuestsPage = unstable_cache(
-  async (q: string, side: string, group: string, rsvp: string, pageReq: number): Promise<GuestsPage> => {
+  async (q: string, side: string, group: string, rsvp: string, mineId: string, pageReq: number): Promise<GuestsPage> => {
     await connectDB();
-    const filter = buildGuestFilter({ q, side: side as Side | "", group: group as Group | "", rsvp: rsvp as Rsvp | "", page: pageReq });
+    // mineId = "" means everyone's guests; otherwise only the guests added by that user
+    const filter = buildGuestFilter({ q, side: side as Side | "", group: group as Group | "", rsvp: rsvp as Rsvp | "", mine: mineId !== "", page: pageReq }, mineId);
     const [totals, anyGuest] = await Promise.all([
       Guest.aggregate<{ count: number; adults: number; kids: number }>([
         { $match: filter },
@@ -92,7 +93,6 @@ export const getGuestsPage = unstable_cache(
       group: g.group ?? "other",
       adults: g.adults ?? 1,
       kids: g.kids ?? 0,
-      events: g.events ?? [],
       invitation: g.invitation ?? "not_sent",
       rsvp: g.rsvp ?? "pending",
       notes: g.notes ?? "",

@@ -4,6 +4,11 @@
   --font-sans: var(--font-sinhala), ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
+:root {
+  /* Height of the phone bottom tab bar (incl. the iPhone home-indicator area). Pages reserve this much space. */
+  --tabbar-h: calc(4.75rem + env(safe-area-inset-bottom, 0px));
+}
+
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
@@ -25,7 +30,33 @@ body {
   display: none;
 }
 
+/* Home page: hearts drift upward and fade. transform/opacity only, so it stays on the GPU. */
+@keyframes float-heart {
+  0% {
+    transform: translateY(0) scale(0.8);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-105dvh) scale(1.1);
+    opacity: 0;
+  }
+}
+.float-heart {
+  animation-name: float-heart;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .float-heart {
+    animation: none !important;
+    opacity: 0.5;
+    bottom: 12%;
+  }
   * {
     scroll-behavior: auto !important;
     transition: none !important;

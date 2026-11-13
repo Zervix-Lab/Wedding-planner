@@ -3,7 +3,6 @@
 import type { DictKey } from "./i18n";
 import { normalizeBi } from "./bi";
 import {
-  EVENTS,
   GROUPS,
   INVITATIONS,
   MAX_IMAGES,
@@ -18,7 +17,6 @@ import {
   type Role,
   type Rsvp,
   type Side,
-  type WeddingEvent,
 } from "./types";
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; error: DictKey };
@@ -60,7 +58,6 @@ export interface VendorInput {
   contact: string;
   serviceCharge: number;
   minPlates: number;
-  showOnLanding: boolean;
   options: {
     _id?: string;
     name: Bi;
@@ -121,7 +118,6 @@ export function parseVendor(raw: unknown): Parsed<VendorInput> {
       contact: str(raw.contact, 120),
       serviceCharge: num(raw.serviceCharge, 0, 100, 0),
       minPlates: Math.round(num(raw.minPlates, 0, 100000, 0)),
-      showOnLanding: raw.showOnLanding !== false,
       options,
     },
   };
@@ -135,7 +131,6 @@ export interface GuestInput {
   group: Group;
   adults: number;
   kids: number;
-  events: WeddingEvent[];
   invitation: Invitation;
   rsvp: Rsvp;
   notes: string;
@@ -150,8 +145,6 @@ export function parseGuest(raw: unknown): Parsed<GuestInput> {
   const invitation = oneOf(raw.invitation, INVITATIONS);
   const rsvp = oneOf(raw.rsvp, RSVPS);
   if (!side || !group || !invitation || !rsvp) return bad("err.invalid");
-  const events = EVENTS.filter((e) => Array.isArray(raw.events) && raw.events.includes(e));
-  if (events.length === 0) return bad("err.pickEvent");
   return {
     ok: true,
     value: {
@@ -161,7 +154,6 @@ export function parseGuest(raw: unknown): Parsed<GuestInput> {
       group,
       adults: Math.round(num(raw.adults, 0, 100, 1)),
       kids: Math.round(num(raw.kids, 0, 100, 0)),
-      events,
       invitation,
       rsvp,
       notes: str(raw.notes, 500),
@@ -175,6 +167,9 @@ export interface PlanInput {
   adults: number;
   kids: number;
   useGuestList: boolean;
+  listBasis: "confirmed" | "all";
+  extraAdults: number;
+  extraKids: number;
   selections: { vendor: string; optionId: string }[];
 }
 
@@ -193,6 +188,9 @@ export function parsePlan(raw: unknown): Parsed<PlanInput> {
       adults: Math.round(num(raw.adults, 0, 100000, 1)),
       kids: Math.round(num(raw.kids, 0, 100000, 0)),
       useGuestList: raw.useGuestList === true,
+      listBasis: raw.listBasis === "all" ? "all" : "confirmed",
+      extraAdults: Math.round(num(raw.extraAdults, 0, 100000, 0)),
+      extraKids: Math.round(num(raw.extraKids, 0, 100000, 0)),
       selections,
     },
   };

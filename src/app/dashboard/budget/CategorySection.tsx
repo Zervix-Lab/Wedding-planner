@@ -3,25 +3,26 @@ import Image from "next/image";
 import { memo } from "react";
 import { Icon } from "@/components/Icon";
 import { useLang, useT } from "@/components/Providers";
-import type { Choice } from "@/lib/calc";
+import { sameChoice, type Choice } from "@/lib/calc";
 import { formatMoney } from "@/lib/money";
 import { bi, type Category, type CategoryDTO, type VendorDTO } from "@/lib/types";
 
 interface Props {
   category: CategoryDTO;
   vendors: VendorDTO[];
-  pick: Choice | undefined;
-  onSelect: (category: Category, pick: Choice | null) => void;
+  picks: Choice[] | undefined;
+  /** pick = tick/untick that package; null = clear the whole category */
+  onToggle: (category: Category, pick: Choice | null) => void;
 }
 
 const CARD =
   "flex items-start gap-3 rounded-xl border-2 border-stone-300 bg-white p-3 transition peer-checked:border-rose-800 peer-checked:bg-rose-50 peer-focus-visible:outline-3 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-rose-700 hover:border-stone-500";
 
-function Mark({ selected }: { selected: boolean }) {
+function Mark({ selected, round = false }: { selected: boolean; round?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 ${
+      className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center border-2 ${round ? "rounded-full" : "rounded-md"} ${
         selected ? "border-rose-800 bg-rose-800 text-white" : "border-stone-400 bg-white"
       }`}
     >
@@ -34,10 +35,11 @@ function Mark({ selected }: { selected: boolean }) {
  * One section per category. Memoised: typing in the guest-count boxes (or picking in another category)
  * does not re-render this component, because its props only change when ITS selection changes.
  */
-export const CategorySection = memo(function CategorySection({ category, vendors, pick, onSelect }: Props) {
+export const CategorySection = memo(function CategorySection({ category, vendors, picks, onToggle }: Props) {
   const t = useT();
   const lang = useLang();
   const name = `cat-${category.slug}`;
+  const none = !picks || picks.length === 0;
 
   return (
     <fieldset className="rounded-2xl border border-stone-300 bg-white p-3 shadow-sm sm:p-4">
@@ -45,9 +47,9 @@ export const CategorySection = memo(function CategorySection({ category, vendors
 
       <div className="space-y-3">
         <label className="block cursor-pointer">
-          <input type="radio" name={name} className="peer sr-only" checked={!pick} onChange={() => onSelect(category.slug, null)} />
+          <input type="radio" name={name} className="peer sr-only" checked={none} onChange={() => onToggle(category.slug, null)} />
           <div className={CARD}>
-            <Mark selected={!pick} />
+            <Mark selected={none} round />
             <span className="text-lg font-semibold">{t("budget.none")}</span>
           </div>
         </label>
@@ -79,16 +81,11 @@ export const CategorySection = memo(function CategorySection({ category, vendors
             ) : (
               <div className="space-y-2">
                 {v.options.map((o) => {
-                  const selected = pick?.vendorId === v._id && pick.optionId === o._id;
+                  const choice = { vendorId: v._id, optionId: o._id };
+                  const selected = (picks ?? []).some((p) => sameChoice(p, choice));
                   return (
                     <label key={o._id} className="block cursor-pointer">
-                      <input
-                        type="radio"
-                        name={name}
-                        className="peer sr-only"
-                        checked={selected}
-                        onChange={() => onSelect(category.slug, { vendorId: v._id, optionId: o._id })}
-                      />
+                      <input type="checkbox" className="peer sr-only" checked={selected} onChange={() => onToggle(category.slug, choice)} />
                       <div className={CARD}>
                         <Mark selected={selected} />
                         <div className="min-w-0 flex-1">

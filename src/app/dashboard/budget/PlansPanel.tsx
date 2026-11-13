@@ -3,10 +3,11 @@ import { useMemo, useState, useTransition } from "react";
 import { Icon } from "@/components/Icon";
 import { useConfirm, useLang, useT, useToast } from "@/components/Providers";
 import { Badge, Button, Card, EmptyState } from "@/components/ui";
-import { buildLines, picksFromSelections, planCounts, sumLines, type Counts, type Line } from "@/lib/calc";
+import { buildLines, picksFromSelections, planCounts, sumLines, type Counts, type GuestCounts, type Line } from "@/lib/calc";
 import { formatMoney } from "@/lib/money";
 import { bi, type CategoryDTO, type PlanDTO, type VendorDTO } from "@/lib/types";
 import { deletePlan, setFinalPlan } from "./actions";
+import { Breakdown } from "./Breakdown";
 
 interface Row {
   plan: PlanDTO;
@@ -21,12 +22,12 @@ interface Props {
   byId: Map<string, VendorDTO>;
   categories: CategoryDTO[];
   canManage: boolean;
-  confirmed: Counts;
+  guests: GuestCounts;
   onOpen: (plan: PlanDTO) => void;
   onBuild: () => void;
 }
 
-export function PlansPanel({ plans, byId, categories, canManage, confirmed, onOpen, onBuild }: Props) {
+export function PlansPanel({ plans, byId, categories, canManage, guests, onOpen, onBuild }: Props) {
   const t = useT();
   const lang = useLang();
   const order = useMemo(() => categories.map((c) => c.slug), [categories]);
@@ -37,17 +38,18 @@ export function PlansPanel({ plans, byId, categories, canManage, confirmed, onOp
   const [compareIds, setCompareIds] = useState<string[]>([]);
   const [showCompare, setShowCompare] = useState(false);
   const [hidden, setHidden] = useState<string[]>([]); // optimistic deletes
+  const [expandedId, setExpandedId] = useState<string | null>(null); // read-only view: which plan shows its breakdown
 
   // Totals are recalculated from CURRENT vendor prices every time, never read from the database.
   const rows = useMemo<Row[]>(
     () =>
       plans.map((plan) => {
-        const counts = planCounts(plan, confirmed);
+        const counts = planCounts(plan, guests);
         const { picks, missing } = picksFromSelections(plan.selections, byId);
         const lines = buildLines(picks, byId, counts.adults, counts.kids, order);
         return { plan, counts, lines, missing, total: sumLines(lines) };
       }),
-    [plans, byId, confirmed, order],
+    [plans, byId, guests, order],
   );
 
   const toggleCompare = (id: string) => {
@@ -82,6 +84,11 @@ export function PlansPanel({ plans, byId, categories, canManage, confirmed, onOp
     });
   }
 
+  if (plans.length === 0 && !canManage) {
+    // Editors only see what the admin saved. Nothing saved yet = still being worked on.
+    return <EmptyState icon="wallet" title={t("budget.inProgress")} hint={t("budget.inProgressHint")} />;
+  }
+
   if (plans.length === 0) {
     return (
       <EmptyState
@@ -99,9 +106,29 @@ export function PlansPanel({ plans, byId, categories, canManage, confirmed, onOp
 
   const compared = compareIds.map((id) => rows.find((r) => r.plan._id === id)).filter((r): r is Row => Boolean(r));
   const comparing = showCompare && compared.length >= 2;
+  const finalRow = rows.find((r) => r.plan.isFinal && !hidden.includes(r.plan._id));
 
   return (
     <div className="space-y-5">
+      {/* Read-only view (editors): the admin's final budget, recalculated live from current prices and the guest list */}
+      {!canManage && finalRow && (
+        <Card className="border-2 border-green-700">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <Badge tone="green">
+              <span className="inline-flex items-center gap-1">
+                <Icon name="star" className="h-4 w-4" />
+                {t("budget.final")}
+              </span>
+            </Badge>
+            <span className="text-lg font-semibold text-rose-900">{finalRow.plan.name}</span>
+          </div>
+          <p className="mb-3 text-base text-stone-700">
+            {t("budget.adultsKids", { adults: finalRow.counts.adults, kids: finalRow.counts.kids })} · {t("budget.liveHint")}
+          </p>
+          <Breakdown lines={finalRow.lines} total={finalRow.total} emptyKey="budget.nothingPicked" catNames={catNames} title={t("budget.liveBudget")} />
+        </Card>
+      )}
+
       {comparing && <CompareTable rows={compared} order={order} catNames={catNames} onClose={() => setShowCompare(false)} />}
 
       <p className="text-lg text-stone-800">{t("budget.compareHint")}</p>
@@ -127,7 +154,7 @@ export function PlansPanel({ plans, byId, categories, canManage, confirmed, onOp
 
               <ul className="mt-3 space-y-1 text-base">
                 {r.lines.map((l) => (
-                  <li key={l.category}>
+                  <li key={`${l.vendor._id}:${l.option._id}`}>
                     <span className="font-semibold">{catNames.get(l.category) ?? l.category}:</span> {bi(l.vendor.name, lang)} - {bi(l.option.name, lang)}
                   </li>
                 ))}
@@ -144,10 +171,22 @@ export function PlansPanel({ plans, byId, categories, canManage, confirmed, onOp
                 {t("budget.compare")}
               </label>
 
+              {!canManage && expandedId === r.plan._id && (
+                <div className="mt-4 border-t border-stone-300 pt-4">
+                  <Breakdown lines={r.lines} total={r.total} emptyKey="budget.nothingPicked" catNames={catNames} />
+                </div>
+              )}
+
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button icon="open" onClick={() => onOpen(r.plan)}>
-                  {t("budget.openPlan")}
-                </Button>
+                {canManage ? (
+                  <Button icon="open" onClick={() => onOpen(r.plan)}>
+                    {t("budget.openPlan")}
+                  </Button>
+                ) : (
+                  <Button icon={expandedId === r.plan._id ? "up" : "down"} onClick={() => setExpandedId(expandedId === r.plan._id ? null : r.plan._id)}>
+                    {expandedId === r.plan._id ? t("budget.hideDetails") : t("budget.seeDetails")}
+                  </Button>
+                )}
                 {canManage && !r.plan.isFinal && (
                   <Button variant="secondary" icon="star" onClick={() => makeFinal(r.plan)} disabled={pending}>
                     {t("budget.makeFinal")}
@@ -220,15 +259,19 @@ function CompareTable({ rows, order, catNames, onClose }: { rows: Row[]; order: 
                   {catNames.get(c) ?? c}
                 </th>
                 {rows.map((r) => {
-                  const l = r.lines.find((x) => x.category === c);
+                  const ls = r.lines.filter((x) => x.category === c);
                   return (
                     <td key={r.plan._id} className={head}>
-                      {l ? (
-                        <>
-                          <span className="block font-semibold">{bi(l.vendor.name, lang)}</span>
-                          <span className="block text-stone-700">{bi(l.option.name, lang)}</span>
-                          <span className="block tabular-nums text-rose-900">{formatMoney(l.calc.total)}</span>
-                        </>
+                      {ls.length > 0 ? (
+                        <div className="space-y-2">
+                          {ls.map((l) => (
+                            <div key={`${l.vendor._id}:${l.option._id}`}>
+                              <span className="block font-semibold">{bi(l.vendor.name, lang)}</span>
+                              <span className="block text-stone-700">{bi(l.option.name, lang)}</span>
+                              <span className="block tabular-nums text-rose-900">{formatMoney(l.calc.total)}</span>
+                            </div>
+                          ))}
+                        </div>
                       ) : (
                         <span className="text-stone-500">-</span>
                       )}

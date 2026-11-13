@@ -10,10 +10,6 @@ const settingsSchema = new Schema({
   weddingTime: { type: String, default: "", maxlength: 5 },
   weddingVenue: { type: String, trim: true, default: "", maxlength: 200 },
   weddingMap: { type: String, trim: true, default: "", maxlength: 300 },
-  homecomingDate: { type: Date, default: null },
-  homecomingTime: { type: String, default: "", maxlength: 5 },
-  homecomingVenue: { type: String, trim: true, default: "", maxlength: 200 },
-  homecomingMap: { type: String, trim: true, default: "", maxlength: 300 },
 });
 
 export type SettingsDoc = InferSchemaType<typeof settingsSchema>;

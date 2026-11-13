@@ -8,7 +8,7 @@ import { getAllVendors, getSettings } from "@/lib/data";
 import { getGuestStats } from "@/lib/guests-data";
 import { getI18n } from "@/lib/i18n-server";
 import { formatMoney } from "@/lib/money";
-import { getConfirmedCounts, getPlans } from "@/lib/plans-data";
+import { getGuestCounts, getPlans } from "@/lib/plans-data";
 import { INVITATIONS, RSVPS, bi, type Rsvp } from "@/lib/types";
 import { FinalBudget } from "./FinalBudget";
 import { SettingsForm } from "./SettingsForm";
@@ -38,10 +38,10 @@ const RSVP_BAR: Record<Rsvp, string> = { confirmed: "bg-green-600", maybe: "bg-a
 export default async function DashboardHome() {
   // Everything below is read from the server cache (refreshed the moment anything changes), all in parallel.
   const [user, { lang, t }] = await Promise.all([requireUserPage(), getI18n()]);
-  const [settings, stats, confirmed, plans, vendors, categories] = await Promise.all([
+  const [settings, stats, guestCounts, plans, vendors, categories] = await Promise.all([
     getSettings(),
     getGuestStats(),
-    getConfirmedCounts(),
+    getGuestCounts(),
     getPlans(),
     getAllVendors(),
     getCategories(),
@@ -63,7 +63,7 @@ export default async function DashboardHome() {
   let finalCounts = { adults: 0, kids: 0 };
   if (finalPlan) {
     const byId = indexVendors(vendors);
-    finalCounts = planCounts(finalPlan, confirmed);
+    finalCounts = planCounts(finalPlan, guestCounts);
     finalLines = buildLines(picksFromSelections(finalPlan.selections, byId).picks, byId, finalCounts.adults, finalCounts.kids, order);
     finalTotal = sumLines(finalLines);
   }

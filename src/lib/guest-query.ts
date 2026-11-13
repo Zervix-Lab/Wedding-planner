@@ -1,5 +1,5 @@
 // Shared by the Guests page and the Excel export so "what you see" is exactly "what you download".
-import type { QueryFilter } from "mongoose";
+import { Types, type QueryFilter } from "mongoose";
 import type { GuestDoc } from "./models/Guest";
 import { GROUPS, RSVPS, SIDES, type Group, type Rsvp, type Side } from "./types";
 import { oneOf } from "./validate";
@@ -9,6 +9,8 @@ export interface GuestParams {
   side: Side | "";
   group: Group | "";
   rsvp: Rsvp | "";
+  /** true = only the guests the signed-in user added */
+  mine: boolean;
   page: number;
 }
 
@@ -21,12 +23,15 @@ export function parseGuestParams(sp: Record<string, string | string[] | undefine
     side: oneOf(one("side"), SIDES) ?? "",
     group: oneOf(one("group"), GROUPS) ?? "",
     rsvp: oneOf(one("rsvp"), RSVPS) ?? "",
+    mine: one("mine") === "1",
     page: Math.max(1, Math.floor(Number(one("page")) || 1)),
   };
 }
 
-export function buildGuestFilter(p: GuestParams): QueryFilter<GuestDoc> {
+/** `meId` = the signed-in user's id; it is only used when the "mine" filter is on. */
+export function buildGuestFilter(p: GuestParams, meId: string): QueryFilter<GuestDoc> {
   const filter: QueryFilter<GuestDoc> = {};
+  if (p.mine && Types.ObjectId.isValid(meId)) filter.addedBy = new Types.ObjectId(meId);
   if (p.side) filter.side = p.side;
   if (p.group) filter.group = p.group;
   if (p.rsvp) filter.rsvp = p.rsvp;

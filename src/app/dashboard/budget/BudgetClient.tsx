@@ -10,8 +10,12 @@ import {
   picksFromSelections,
   selectionsFromPicks,
   sumLines,
+  planCounts,
+  sameChoice,
   type Counts,
   type Choice,
+  type GuestCounts,
+  type ListBasis,
   type PickMap,
 } from "@/lib/calc";
 import { formatMoney } from "@/lib/money";
@@ -26,13 +30,13 @@ const toCount = (s: string) => Math.max(0, Math.min(100000, Math.floor(Number(s)
 export function BudgetClient({
   vendors,
   plans,
-  confirmed,
+  guests,
   categories,
   canManage,
 }: {
   vendors: VendorDTO[];
   plans: PlanDTO[];
-  confirmed: Counts;
+  guests: GuestCounts;
   categories: CategoryDTO[];
   canManage: boolean;
 }) {
@@ -45,6 +49,9 @@ export function BudgetClient({
   const [adults, setAdults] = useState("1");
   const [kids, setKids] = useState("0");
   const [useList, setUseList] = useState(false);
+  const [basis, setBasis] = useState<ListBasis>("all");
+  const [extraAdults, setExtraAdults] = useState("0");
+  const [extraKids, setExtraKids] = useState("0");
   const [picks, setPicks] = useState<PickMap>({});
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
@@ -56,15 +63,29 @@ export function BudgetClient({
   const sections = useMemo(() => categories.map((c) => ({ category: c, vendors: vendors.filter((v) => v.category === c.slug) })), [categories, vendors]);
 
   // Live calculation: pure client-side, recalculated only when an input actually changes.
-  const counts = useMemo<Counts>(() => (useList ? confirmed : { adults: toCount(adults), kids: toCount(kids) }), [useList, confirmed, adults, kids]);
+  const counts = useMemo<Counts>(
+    () =>
+      planCounts(
+        { adults: toCount(adults), kids: toCount(kids), useGuestList: useList, listBasis: basis, extraAdults: toCount(extraAdults), extraKids: toCount(extraKids) },
+        guests,
+      ),
+    [useList, basis, guests, adults, kids, extraAdults, extraKids],
+  );
   const lines = useMemo(() => buildLines(picks, byId, counts.adults, counts.kids, order), [picks, byId, counts, order]);
   const total = useMemo(() => sumLines(lines), [lines]);
 
   // Stable callback so memoised CategorySections are not re-rendered by unrelated state changes
-  const select = useCallback((category: Category, pick: Choice | null) => {
+  const toggle = useCallback((category: Category, pick: Choice | null) => {
     setPicks((prev) => {
       const next = { ...prev };
-      if (pick) next[category] = pick;
+      if (!pick) {
+        delete next[category];
+        return next;
+      }
+      const cur = prev[category] ?? [];
+      const rest = cur.filter((c) => !sameChoice(c, pick));
+      const list = rest.length === cur.length ? [...cur, pick] : rest; // not ticked yet -> add, already ticked -> remove
+      if (list.length > 0) next[category] = list;
       else delete next[category];
       return next;
     });
@@ -79,6 +100,9 @@ export function BudgetClient({
     setAdults(String(plan.adults));
     setKids(String(plan.kids));
     setUseList(plan.useGuestList);
+    setBasis(plan.listBasis);
+    setExtraAdults(String(plan.extraAdults));
+    setExtraKids(String(plan.extraKids));
     setLoadedId(plan._id);
     setNameInput("");
     setTab("build");
@@ -91,6 +115,9 @@ export function BudgetClient({
       adults: toCount(adults),
       kids: toCount(kids),
       useGuestList: useList,
+      listBasis: basis,
+      extraAdults: toCount(extraAdults),
+      extraKids: toCount(extraKids),
       selections: selectionsFromPicks(picks, order),
     };
     startSave(async () => {
@@ -131,7 +158,7 @@ export function BudgetClient({
     <>
       <PageTitle
         title={t("budget.title")}
-        subtitle={t("budget.subtitle")}
+        subtitle={canManage ? t("budget.subtitle") : t("budget.subtitleView")}
         action={plans.length > 0 ? <ExportButton href="/api/export/plans" label={t("xl.download")} /> : undefined}
       />
 
@@ -142,6 +169,7 @@ export function BudgetClient({
         </p>
       )}
 
+      {canManage && (
       <div role="group" className="mb-5 grid grid-cols-2 gap-2 rounded-2xl bg-stone-200 p-1.5">
         {(["build", "plans"] as const).map((k) => (
           <button
@@ -158,49 +186,72 @@ export function BudgetClient({
           </button>
         ))}
       </div>
+      )}
 
-      {tab === "plans" ? (
-        <PlansPanel plans={plans} byId={byId} categories={categories} canManage={canManage} confirmed={confirmed} onOpen={openPlan} onBuild={() => setTab("build")} />
+      {/* Editors cannot build or save budgets: they only see what the admin saved */}
+      {tab === "plans" || !canManage ? (
+        <PlansPanel plans={plans} byId={byId} categories={categories} canManage={canManage} guests={guests} onOpen={openPlan} onBuild={() => setTab("build")} />
       ) : (
         <div className="pb-32 lg:grid lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start lg:gap-6 lg:pb-0">
           <div className="space-y-4">
             <Card>
               <h2 className="mb-3 text-xl font-bold">{t("budget.guestCounts")}</h2>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label={t("budget.adults")}>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={useList ? String(confirmed.adults) : adults}
-                    disabled={useList}
-                    onChange={(e) => setAdults(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                  />
-                </Field>
-                <Field label={t("budget.kids")}>
-                  <Input
-                    type="number"
-                    inputMode="numeric"
-                    min={0}
-                    value={useList ? String(confirmed.kids) : kids}
-                    disabled={useList}
-                    onChange={(e) => setKids(e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                  />
-                </Field>
-              </div>
-              <label className="mt-3 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border-2 border-stone-300 px-3 text-lg">
+              <label className="mb-3 flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border-2 border-stone-300 px-3 text-lg">
                 <input type="checkbox" className="h-6 w-6 shrink-0 accent-rose-800" checked={useList} onChange={(e) => setUseList(e.target.checked)} />
-                <span>
-                  {t("budget.useGuestList")}
-                  {useList && <span className="block text-base text-stone-700">{t("budget.fromList", { adults: confirmed.adults, kids: confirmed.kids })}</span>}
-                </span>
+                <span>{t("budget.useGuestList")}</span>
               </label>
+
+              {useList ? (
+                <div className="space-y-4">
+                  {/* Whole guest list, by reply status */}
+                  <ul className="divide-y divide-stone-200 rounded-xl border-2 border-stone-300 bg-stone-50 text-base">
+                    {(["confirmed", "maybe", "pending", "declined"] as const).map((s) => (
+                      <li key={s} className="flex items-center justify-between gap-3 px-3 py-2">
+                        <span className="font-semibold">{t(`rsvp.${s}`)}</span>
+                        <span className="tabular-nums text-stone-800">{t("budget.adultsKids", { adults: guests[s].adults, kids: guests[s].kids })}</span>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <div role="radiogroup" className="grid gap-2">
+                    {(["all", "confirmed"] as const).map((b) => (
+                      <label key={b} className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border-2 px-3 text-lg ${basis === b ? "border-rose-800 bg-rose-50" : "border-stone-300"}`}>
+                        <input type="radio" name="basis" className="h-5 w-5 shrink-0 accent-rose-800" checked={basis === b} onChange={() => setBasis(b)} />
+                        {t(`budget.basis.${b}`)}
+                      </label>
+                    ))}
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-base font-semibold">{t("budget.extra")}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label={t("budget.adults")}>
+                        <Input type="number" inputMode="numeric" min={0} value={extraAdults} onChange={(e) => setExtraAdults(e.target.value)} onFocus={(e) => e.target.select()} />
+                      </Field>
+                      <Field label={t("budget.kids")}>
+                        <Input type="number" inputMode="numeric" min={0} value={extraKids} onChange={(e) => setExtraKids(e.target.value)} onFocus={(e) => e.target.select()} />
+                      </Field>
+                    </div>
+                  </div>
+
+                  <p className="rounded-xl bg-rose-50 px-3 py-2 text-lg font-bold text-rose-900">
+                    {t("budget.counting", { adults: counts.adults, kids: counts.kids })}
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={t("budget.adults")}>
+                    <Input type="number" inputMode="numeric" min={0} value={adults} onChange={(e) => setAdults(e.target.value)} onFocus={(e) => e.target.select()} />
+                  </Field>
+                  <Field label={t("budget.kids")}>
+                    <Input type="number" inputMode="numeric" min={0} value={kids} onChange={(e) => setKids(e.target.value)} onFocus={(e) => e.target.select()} />
+                  </Field>
+                </div>
+              )}
             </Card>
 
             {sections.map((s) => (
-              <CategorySection key={s.category.slug} category={s.category} vendors={s.vendors} pick={picks[s.category.slug]} onSelect={select} />
+              <CategorySection key={s.category.slug} category={s.category} vendors={s.vendors} picks={picks[s.category.slug]} onToggle={toggle} />
             ))}
           </div>
 
@@ -213,7 +264,7 @@ export function BudgetClient({
           </aside>
 
           {/* Mobile: bottom bar + sheet */}
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t-2 border-rose-800 bg-white px-3 py-2 shadow-[0_-4px_12px_rgba(0,0,0,.15)] lg:hidden">
+          <div className="fixed inset-x-0 bottom-(--tabbar-h) z-30 border-t-2 border-rose-800 bg-white px-3 py-2 shadow-[0_-4px_12px_rgba(0,0,0,.15)] md:bottom-0 lg:hidden">
             <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
               <div>
                 <p className="text-base font-semibold leading-tight text-stone-700">{t("budget.total")}</p>

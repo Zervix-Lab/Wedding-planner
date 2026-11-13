@@ -6,12 +6,11 @@ import { connectDB } from "@/lib/db";
 import { fail, ok, type ActionResult } from "@/lib/actions";
 import { CategoryModel } from "@/lib/models/Category";
 import { Vendor } from "@/lib/models/Vendor";
-import { canManageVendors } from "@/lib/permissions";
+import { canManageVendors, canModifyVendor } from "@/lib/permissions";
 import { isId, parseVendor, type VendorInput } from "@/lib/validate";
 
 function refresh() {
   revalidateTag("vendors");
-  revalidateTag("landing");
   revalidateTag("categories");
   revalidatePath("/dashboard/vendors");
   revalidatePath("/dashboard/budget");
@@ -40,7 +39,7 @@ export async function createVendor(raw: unknown): Promise<ActionResult> {
     if (!category) return fail("err.invalid");
     const { newCategory: _unused, ...data } = p.value;
     void _unused;
-    await Vendor.create({ ...data, category });
+    await Vendor.create({ ...data, category, addedBy: me.id });
   } catch (err) {
     console.error(err);
     return fail("err.generic");
@@ -59,6 +58,7 @@ export async function updateVendor(id: string, raw: unknown): Promise<ActionResu
     await connectDB();
     const vendor = await Vendor.findById(id);
     if (!vendor) return fail("err.notFound");
+    if (!canModifyVendor(me, vendor.addedBy ? String(vendor.addedBy) : "")) return fail("err.notYourVendor");
     const category = await resolveCategory(p.value);
     if (!category) return fail("err.invalid");
     const removedImages = vendor.images.filter((img) => !p.value.images.includes(img));
@@ -82,6 +82,9 @@ export async function deleteVendor(id: string): Promise<ActionResult> {
   if (!isId(id)) return fail("err.invalid");
   try {
     await connectDB();
+    const existing = await Vendor.findById(id).select("addedBy").lean();
+    if (!existing) return ok();
+    if (!canModifyVendor(me, existing.addedBy ? String(existing.addedBy) : "")) return fail("err.notYourVendor");
     const vendor = await Vendor.findByIdAndDelete(id);
     if (vendor) await destroyImages(vendor.images);
   } catch (err) {

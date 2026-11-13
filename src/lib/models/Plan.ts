@@ -7,6 +7,10 @@ const planSchema = new Schema(
     adults: { type: Number, min: 0, max: 100000, default: 1 },
     kids: { type: Number, min: 0, max: 100000, default: 0 },
     useGuestList: { type: Boolean, default: false },
+    // Only used when useGuestList is true: which guests to count, plus extra people on top of the list.
+    listBasis: { type: String, enum: ["confirmed", "all"], default: "confirmed" },
+    extraAdults: { type: Number, min: 0, max: 100000, default: 0 },
+    extraKids: { type: Number, min: 0, max: 100000, default: 0 },
     selections: {
       type: [
         new Schema(

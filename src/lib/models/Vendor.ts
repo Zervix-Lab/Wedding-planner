@@ -23,8 +23,9 @@ const vendorSchema = new Schema(
     contact: { type: String, trim: true, default: "", maxlength: 120 },
     serviceCharge: { type: Number, min: 0, max: 100, default: 0 },
     minPlates: { type: Number, min: 0, max: 100000, default: 0 },
-    showOnLanding: { type: Boolean, default: true },
     options: { type: [optionSchema], default: [] },
+    // Who added this vendor. Only this person (or an admin) may edit or delete it. Older vendors have none -> admin only.
+    addedBy: { type: Schema.Types.ObjectId, ref: "User", index: true },
   },
   { timestamps: true },
 );

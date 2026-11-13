@@ -50,7 +50,10 @@ export interface Choice {
   vendorId: string;
   optionId: string;
 }
-export type PickMap = Record<Category, Choice | undefined>;
+/** Any number of packages can be ticked in a category (a hotel hall AND a menu, two photo packages, ...). */
+export type PickMap = Record<Category, Choice[] | undefined>;
+
+export const sameChoice = (a: Choice, b: Choice): boolean => a.vendorId === b.vendorId && a.optionId === b.optionId;
 
 export interface Line {
   category: Category;
@@ -73,25 +76,27 @@ export function picksFromSelections(selections: PlanSelection[], byId: Map<strin
       missing++;
       continue;
     }
-    picks[v.category] = { vendorId: v._id, optionId: s.optionId };
+    const choice = { vendorId: v._id, optionId: s.optionId };
+    const list = (picks[v.category] ??= []);
+    if (!list.some((c) => sameChoice(c, choice))) list.push(choice);
   }
   return { picks, missing };
 }
 
 /** `order` = category slugs in display order (lines are always listed in this order). */
 export function selectionsFromPicks(picks: PickMap, order: string[]): PlanSelection[] {
-  return order.flatMap((c) => (picks[c] ? [{ vendor: picks[c]!.vendorId, optionId: picks[c]!.optionId }] : []));
+  return order.flatMap((c) => (picks[c] ?? []).map((p) => ({ vendor: p.vendorId, optionId: p.optionId })));
 }
 
 export function buildLines(picks: PickMap, byId: Map<string, VendorDTO>, adults: number, kids: number, order: string[]): Line[] {
   const lines: Line[] = [];
   for (const category of order) {
-    const p = picks[category];
-    if (!p) continue;
-    const vendor = byId.get(p.vendorId);
-    const option = vendor?.options.find((o) => o._id === p.optionId);
-    if (!vendor || !option) continue;
-    lines.push({ category, vendor, option, calc: calcOption(vendor, option, adults, kids) });
+    for (const p of picks[category] ?? []) {
+      const vendor = byId.get(p.vendorId);
+      const option = vendor?.options.find((o) => o._id === p.optionId);
+      if (!vendor || !option) continue;
+      lines.push({ category, vendor, option, calc: calcOption(vendor, option, adults, kids) });
+    }
   }
   return lines;
 }
@@ -103,7 +108,38 @@ export interface Counts {
   kids: number;
 }
 
-/** The headcount a plan should use right now. */
-export function planCounts(plan: { adults: number; kids: number; useGuestList: boolean }, confirmed: Counts): Counts {
-  return plan.useGuestList ? confirmed : { adults: plan.adults, kids: plan.kids };
+/** Guest-list headcount split by RSVP status. */
+export interface GuestCounts {
+  confirmed: Counts;
+  maybe: Counts;
+  pending: Counts;
+  declined: Counts;
+}
+
+/** confirmed = only people who said they are coming; all = everyone not declined (coming + maybe + waiting). */
+export type ListBasis = "confirmed" | "all";
+export const LIST_BASES: readonly ListBasis[] = ["confirmed", "all"];
+
+export function listCounts(g: GuestCounts, basis: ListBasis): Counts {
+  if (basis === "confirmed") return g.confirmed;
+  return {
+    adults: g.confirmed.adults + g.maybe.adults + g.pending.adults,
+    kids: g.confirmed.kids + g.maybe.kids + g.pending.kids,
+  };
+}
+
+export interface CountSource {
+  adults: number;
+  kids: number;
+  useGuestList: boolean;
+  listBasis: ListBasis;
+  extraAdults: number;
+  extraKids: number;
+}
+
+/** The headcount a plan should use right now: typed numbers, or the guest list plus any extra people. */
+export function planCounts(plan: CountSource, guests: GuestCounts): Counts {
+  if (!plan.useGuestList) return { adults: plan.adults, kids: plan.kids };
+  const base = listCounts(guests, plan.listBasis);
+  return { adults: base.adults + plan.extraAdults, kids: base.kids + plan.extraKids };
 }

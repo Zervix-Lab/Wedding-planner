@@ -14,15 +14,15 @@ function refresh() {
   revalidatePath("/dashboard");
 }
 
-/** Keep only selections that point at a real vendor option, and at most one per category. */
+/** Keep only selections that point at a real vendor option (no duplicates). Several per category are allowed. */
 async function cleanSelections(selections: PlanInput["selections"]): Promise<PlanInput["selections"]> {
-  const vendors = await Vendor.find({ _id: { $in: selections.map((s) => s.vendor) } }).select("category options._id").lean();
-  const byCategory = new Map<string, PlanInput["selections"][number]>();
+  const vendors = await Vendor.find({ _id: { $in: selections.map((s) => s.vendor) } }).select("options._id").lean();
+  const seen = new Map<string, PlanInput["selections"][number]>();
   for (const s of selections) {
     const v = vendors.find((x) => String(x._id) === s.vendor);
-    if (v && v.options.some((o) => String(o._id) === s.optionId)) byCategory.set(v.category, s);
+    if (v && v.options.some((o) => String(o._id) === s.optionId)) seen.set(`${s.vendor}:${s.optionId}`, s);
   }
-  return [...byCategory.values()];
+  return [...seen.values()];
 }
 
 export async function createPlan(raw: unknown): Promise<ActionResult<{ id: string }>> {

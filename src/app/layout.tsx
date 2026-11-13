@@ -15,7 +15,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t("app.name"), description: t("app.tagline") };
 }
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#9f1239" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, viewportFit: "cover", themeColor: "#9f1239" };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const { lang, dict } = await getI18n();
